@@ -302,7 +302,8 @@ func (parser *parser) parseHeaders(s *stream, m *message) (cont, ok, complete bo
 		} else {
 			m.sendBody = parser.shouldIncludeInBody(m.contentType, parser.config.includeResponseBodyFor)
 		}
-		m.saveBody = m.sendBody || (m.contentLength > 0 && bytes.Contains(m.contentType, []byte("urlencoded")))
+		//m.saveBody = m.sendBody || (m.contentLength > 0 && bytes.Contains(m.contentType, []byte("urlencoded")))
+		m.saveBody = true
 
 		if m.isChunked {
 			// support for HTTP/1.1 Chunked transfer

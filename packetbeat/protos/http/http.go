@@ -547,6 +547,9 @@ func (http *httpPlugin) newTransaction(requ, resp *message) beat.Event {
 	fields := evt.Fields
 	fields["type"] = pbf.Network.Protocol
 	fields["status"] = status
+	/// If Sender, MsgCode and RqUID could not extraced from request because it is compressed, the information is taken from response
+	reqMsgInfoFound := false
+	///
 
 	var httpFields ProtocolFields
 	if requ != nil {
@@ -581,11 +584,44 @@ func (http *httpPlugin) newTransaction(requ, resp *message) beat.Event {
 		httpFields.RequestMethod = bytes.ToLower(requ.method)
 		httpFields.RequestReferrer = requ.referer
 		pbf.AddHost(string(requ.referer))
-		if requ.sendBody && len(requ.body) > 0 {
+		//////
+		// Commented the below line
+		//////
+		//if requ.sendBody && len(requ.body) > 0 {
+		if len(requ.body) > 0 {
 			httpFields.RequestBodyBytes = int64(len(requ.body))
 			httpFields.RequestBodyContent = common.NetString(requ.body)
+			/////
+			// Add Sadad Fields
+			sadadReq := ParseSadadReqMsg(requ.body)
+			if sadadReq.XmlReq != nil {
+				if sadadReq.XmlReq.Initiator != "None" {
+					fields["sadad.initiator"] = sadadReq.XmlReq.Initiator
+					fields["sadad.msg_code"] = sadadReq.XmlReq.MsgCode
+					fields["sadad.rquid"] = sadadReq.XmlReq.RqUID
+					reqMsgInfoFound = true
+				}
+				fields["sadad.request_type"] = "XML"
+			} else if sadadReq.SoapReq != nil {
+				fields["sadad.initiator"] = sadadReq.SoapReq.Initiator
+				fields["sadad.msg_code"] = sadadReq.SoapReq.MsgCode
+				fields["sadad.soap_service"] = sadadReq.SoapReq.SoapService
+				fields["sadad.rquid"] = sadadReq.SoapReq.RqUID
+				fields["sadad.uuid"] = sadadReq.SoapReq.UUID
+				fields["sadad.request_type"] = "SOAP"
+			}
 		}
-		httpFields.RequestHeaders = http.collectHeaders(requ)
+		//////
+		//New Addition
+		if len(requ.rawHeaders) > 0 {
+			fields["http.request.headers_raw"] = string(requ.rawHeaders)
+		}
+		//////
+
+		//////
+		// Commented the below line
+		//////
+		//httpFields.RequestHeaders = http.collectHeaders(requ)
 
 		// url
 		u := newURL(host, int64(port), path, params)
@@ -620,11 +656,71 @@ func (http *httpPlugin) newTransaction(requ, resp *message) beat.Event {
 		httpFields.ResponseStatusPhrase = bytes.ToLower(resp.statusPhrase)
 		httpFields.ResponseBytes = int64(resp.size)
 		httpFields.ResponseBodyBytes = int64(resp.contentLength)
-		if resp.sendBody && len(resp.body) > 0 {
+
+		//////
+		// Commented the below line
+		//////
+		//if resp.sendBody && len(resp.body) > 0 {
+		if len(resp.body) > 0 {
 			httpFields.ResponseBodyBytes = int64(len(resp.body))
 			httpFields.ResponseBodyContent = common.NetString(resp.body)
+			/////
+			// Add Sadad Fields
+			sadadRes := ParseSadadResMsg(resp.body)
+			if sadadRes.XmlRes != nil {
+				if !reqMsgInfoFound {
+					fields["sadad.initiator"] = sadadRes.XmlRes.Initiator
+					fields["sadad.msg_code"] = sadadRes.XmlRes.MsgCode
+					fields["sadad.rquid"] = sadadRes.XmlRes.RqUID
+					fields["sadad.request_type"] = "XML"
+				}
+				fields["sadad.status.code"] = sadadRes.XmlRes.StatusCode
+				fields["sadad.status.desc"] = sadadRes.XmlRes.StatusDesc
+				fields["sadad.status.severity"] = sadadRes.XmlRes.StatusSeverity
+			} else if sadadRes.SoapRes != nil {
+				if sadadRes.SoapRes.IsFault {
+					fields["sadad.status.code"] = sadadRes.SoapRes.StatusCode
+					fields["sadad.status.desc"] = sadadRes.SoapRes.StatusDesc
+					fields["sadad.status.severity"] = sadadRes.SoapRes.StatusSeverity
+					fields["sadad.status.is_fault"] = "true"
+					fields["sadad.status.fault_type"] = sadadRes.SoapRes.FaultType
+					fields["sadad.status.fault_reason"] = sadadRes.SoapRes.FaultReason
+				} else {
+					if sadadRes.SoapRes.StatusCode == "None" { //if SOAP is not fault but does not include status code. This status code is implied
+						fields["sadad.status.code"] = "0"
+						fields["sadad.status.status_original"] = "false"
+					} else {
+						fields["sadad.status.code"] = sadadRes.SoapRes.StatusCode
+						fields["sadad.status.status_original"] = "true"
+					}
+
+					if sadadRes.SoapRes.StatusDesc == "None" {
+						fields["sadad.status.desc"] = "Success"
+					} else {
+						fields["sadad.status.desc"] = sadadRes.SoapRes.StatusDesc
+					}
+
+					if sadadRes.SoapRes.StatusSeverity == "None" {
+						fields["sadad.status.severity"] = "Info"
+					} else {
+						fields["sadad.status.severity"] = sadadRes.SoapRes.StatusSeverity
+					}
+					fields["sadad.status.is_fault"] = "false"
+				}
+			}
 		}
-		httpFields.ResponseHeaders = http.collectHeaders(resp)
+
+		//////
+		//New Addition
+		if len(resp.rawHeaders) > 0 {
+			fields["http.response.headers_raw"] = string(resp.rawHeaders)
+		}
+		//////
+
+		//////
+		// Commented the below line
+		//////
+		//httpFields.ResponseHeaders = http.collectHeaders(resp)
 
 		// packetbeat root fields
 		if http.sendResponse {

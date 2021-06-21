@@ -33,6 +33,8 @@ packetbeat.flows:
 
   # Configure reporting period. If set to -1, only killed flows will be reported
   period: 10s
+  
+  enabled: false
 
 # =========================== Transaction protocols ============================
 
@@ -63,7 +65,7 @@ packetbeat.protocols:
 - type: http
   # Configure the ports where to listen for HTTP traffic. You can disable
   # the HTTP protocol by commenting out the list of ports.
-  ports: [80, 8080, 8000, 5000, 8002]
+  ports: [9080]
 
 - type: memcache
   # Configure the ports where to listen for memcache traffic. You can disable
