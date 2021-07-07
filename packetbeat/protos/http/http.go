@@ -400,34 +400,45 @@ func (http *httpPlugin) GapInStream(tcptuple *common.TCPTuple, dir uint8,
 
 	defer logp.Recover("GapInStream(http) exception")
 
+	///////
 	conn := getHTTPConnection(private)
-	if conn == nil {
-		return private, false
-	}
-
-	stream := conn.streams[dir]
-	if stream == nil || stream.message == nil {
-		// nothing to do
-		return private, false
-	}
-
-	ok, complete := http.messageGap(stream, nbytes)
-	if isDetailed {
-		detailedf("messageGap returned ok=%v complete=%v", ok, complete)
-	}
-	if !ok {
-		// on errors, drop stream
+	if conn != nil {
 		conn.streams[dir] = nil
 		return conn, true
 	}
 
-	if complete {
-		// Current message is complete, we need to publish from here
-		http.messageComplete(conn, tcptuple, dir, stream)
-	}
+	return private, true
 
-	// don't drop the stream, we can ignore the gap
-	return private, false
+	///////
+	/*
+		conn := getHTTPConnection(private)
+		if conn == nil {
+			return private, false
+		}
+
+		stream := conn.streams[dir]
+		if stream == nil || stream.message == nil {
+			// nothing to do
+			return private, false
+		}
+
+		ok, complete := http.messageGap(stream, nbytes)
+		if isDetailed {
+			detailedf("messageGap returned ok=%v complete=%v", ok, complete)
+		}
+		if !ok {
+			// on errors, drop stream
+			conn.streams[dir] = nil
+			return conn, true
+		}
+
+		if complete {
+			// Current message is complete, we need to publish from here
+			http.messageComplete(conn, tcptuple, dir, stream)
+		}
+
+		// don't drop the stream, we can ignore the gap
+		return private, false*/
 }
 
 func (http *httpPlugin) handleHTTP(
@@ -451,11 +462,17 @@ func (http *httpPlugin) handleHTTP(
 		if isDebug {
 			debugf("Received request with tuple: %s", m.tcpTuple)
 		}
+		///// Remove any previous requetss
+		conn.requests.pop()
+		/////
 		conn.requests.append(m)
 	} else {
 		if isDebug {
 			debugf("Received response with tuple: %s", m.tcpTuple)
 		}
+		//// Remove any previous responses
+		conn.responses.pop()
+		//////////////
 		conn.responses.append(m)
 		http.correlate(conn)
 	}
